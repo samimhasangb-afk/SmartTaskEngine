@@ -91,7 +91,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Open CORS for Shamim Comment Hasan Jou new comment Under the Joke
+// Open CORS for 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
