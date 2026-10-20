@@ -86,7 +86,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Open CORS for local development 
+// Open CORS for Shamim Comment
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
