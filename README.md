@@ -80,7 +80,7 @@ https://localhost:5001/swagger
    { "username": "rafi", "email": "rafi@example.com", "password": "Passw0rd!" }
    ```
 2. **Login:** `POST /api/auth/login` → the response includes a `token`.
-3. In Swagger, click the **Authorize** button (top right) and enter `Bearer <token>` (or add it as an `Authorization` header in Postman).
+3. In Swagger, click **Authorize** and paste the token only. Swagger adds the `Bearer` prefix.
 4. **Create task:** `POST /api/tasks`
    ```json
    { "title": "Design DB schema", "description": "First draft", "priority": "High", "dueDate": "2026-08-01T00:00:00Z" }
@@ -90,6 +90,22 @@ https://localhost:5001/swagger
 7. **Update status:** `PUT /api/tasks/1` → `{ "status": "InProgress" }`
 8. **View history:** `GET /api/tasks/1/logs` — task creation, status changes, and assignments are all auto-logged here.
 9. **Delete:** `DELETE /api/tasks/1`
+
+## Collaboration endpoints
+
+These sit on top of tasks. A task response now also includes `projectName`, `labels`, `commentCount`, checklist progress, and `isBookmarked`.
+
+- **Projects:** `POST /api/projects`, `GET /api/projects`, `POST /api/projects/{id}/members` with `{ "userId": 2 }`
+- **Move a task into a project:** `PATCH /api/tasks/{id}/project` with `{ "projectId": 1 }`
+- **Comments:** `POST /api/tasks/{id}/comments` with `{ "body": "Looks good" }`
+- **Labels:** `POST /api/labels` with `{ "name": "Backend", "color": "#2563eb" }`, then `POST /api/tasks/{id}/labels/{labelId}`
+- **Checklist:** `POST /api/tasks/{id}/checklist` with `{ "title": "Write tests" }`, then `PATCH /api/tasks/{id}/checklist/{itemId}` with `{ "isDone": true }`
+- **Bookmark:** `POST /api/tasks/{id}/bookmark`, list with `GET /api/bookmarks`
+- **Notifications:** `GET /api/notifications`, `PATCH /api/notifications/{id}/read`, `POST /api/notifications/read-all`
+- **Dashboard:** `GET /api/dashboard`
+- **People you can assign:** `GET /api/users`
+
+New tables are created automatically the first time the API starts. Re-running `database/schema.sql` still drops and recreates the whole database.
 
 ## Notes
 - Enums are serialized as strings in JSON (e.g. `"ToDo"`, `"High"`), not integers.

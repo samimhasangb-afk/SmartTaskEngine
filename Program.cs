@@ -52,6 +52,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITaskService, TaskService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
+builder.Services.AddScoped<TaskAccess>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<ICollaborationService, CollaborationService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Swagger / OpenAPI with JWT "Authorize" button
 builder.Services.AddEndpointsApiExplorer();
@@ -61,7 +66,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Smart Task & Collaboration Engine",
         Version = "v1",
-        Description = "Task management + collaboration REST API with JWT auth and activity logging."
+        Description = "Tasks, projects, comments, labels, checklists, bookmarks, notifications, and a dashboard."
     });
 
     // Http + bearer makes Swagger send "Authorization: Bearer {token}".
@@ -102,6 +107,11 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await DatabaseBootstrap.ApplyAsync(db);
+}
 
 app.UseSwagger();
 app.UseSwaggerUI(options =>

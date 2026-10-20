@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SmartTaskEngine.Data;
+using SmartTaskEngine.DTOs.Labels;
 using SmartTaskEngine.DTOs.Tasks;
 using SmartTaskEngine.Models;
 using SmartTaskEngine.Models.Enums;
@@ -9,19 +10,19 @@ namespace SmartTaskEngine.Services
     public class TaskService : ITaskService
     {
         private readonly ApplicationDbContext _db;
+        private readonly TaskAccess _access;
+        private readonly INotificationService _notifications;
 
-        public TaskService(ApplicationDbContext db)
+        public TaskService(ApplicationDbContext db, TaskAccess access, INotificationService notifications)
         {
             _db = db;
+            _access = access;
+            _notifications = notifications;
         }
 
-        public async Task<List<TaskResponseDto>> GetTasksAsync(int currentUserId, TaskState? status, TaskPriority? priority, string? search)
+        public async Task<List<TaskResponseDto>> GetTasksAsync(int currentUserId, TaskState? status, TaskPriority? priority, string? search, int? projectId, bool bookmarkedOnly = false)
         {
-            var query = _db.TodoTasks
-                .Include(t => t.CreatedByUser)
-                .Include(t => t.AssignedToUser)
-                .Where(t => t.CreatedByUserId == currentUserId || t.AssignedToUserId == currentUserId)
-                .AsQueryable();
+            var query = _access.VisibleTasks(currentUserId);
 
             if (status.HasValue)
                 query = query.Where(t => t.Status == status.Value);
@@ -29,56 +30,71 @@ namespace SmartTaskEngine.Services
             if (priority.HasValue)
                 query = query.Where(t => t.Priority == priority.Value);
 
+            if (projectId.HasValue)
+                query = query.Where(t => t.ProjectId == projectId.Value);
+
+            if (bookmarkedOnly)
+                query = query.Where(t => t.Bookmarks.Any(b => b.UserId == currentUserId));
+
             if (!string.IsNullOrWhiteSpace(search))
                 query = query.Where(t => t.Title.Contains(search) || (t.Description != null && t.Description.Contains(search)));
 
-            var tasks = await query.OrderByDescending(t => t.CreatedAt).ToListAsync();
-
-            return tasks.Select(MapToDto).ToList();
+            var tasks = await _access.WithDetails(query).OrderByDescending(t => t.CreatedAt).ToListAsync();
+            return tasks.Select(t => MapToDto(t, currentUserId)).ToList();
         }
 
-        public async Task<TaskResponseDto?> GetTaskByIdAsync(int id)
+        public async Task<TaskResponseDto?> GetTaskByIdAsync(int id, int currentUserId)
         {
-            var task = await _db.TodoTasks
-                .Include(t => t.CreatedByUser)
-                .Include(t => t.AssignedToUser)
+            var task = await _access.WithDetails(_access.VisibleTasks(currentUserId))
                 .FirstOrDefaultAsync(t => t.Id == id);
-
-            return task == null ? null : MapToDto(task);
+            return task == null ? null : MapToDto(task, currentUserId);
         }
 
-        public async Task<TaskResponseDto> CreateTaskAsync(CreateTaskDto dto, int currentUserId)
+        public async Task<TaskResponseDto?> CreateTaskAsync(CreateTaskDto dto, int currentUserId)
         {
+            if (dto.ProjectId.HasValue && !await _access.CanAccessProjectAsync(dto.ProjectId.Value, currentUserId))
+                return null;
+
+            if (dto.AssignedToUserId.HasValue && !await _db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId.Value))
+                return null;
+
             var task = new TodoTask
             {
-                Title = dto.Title,
+                Title = dto.Title.Trim(),
                 Description = dto.Description,
                 Priority = dto.Priority,
                 DueDate = dto.DueDate,
                 AssignedToUserId = dto.AssignedToUserId,
+                ProjectId = dto.ProjectId,
                 CreatedByUserId = currentUserId,
                 Status = TaskState.ToDo
             };
 
             _db.TodoTasks.Add(task);
             await _db.SaveChangesAsync();
-
             await AddLogAsync(task.Id, currentUserId, "Task created");
 
-            var saved = await _db.TodoTasks
-                .Include(t => t.CreatedByUser)
-                .Include(t => t.AssignedToUser)
-                .FirstAsync(t => t.Id == task.Id);
+            if (dto.AssignedToUserId.HasValue)
+            {
+                await _notifications.NotifyAsync(
+                    dto.AssignedToUserId.Value,
+                    currentUserId,
+                    task.Id,
+                    task.ProjectId,
+                    NotificationType.Assigned,
+                    $"You were assigned \"{task.Title}\".");
+            }
 
-            return MapToDto(saved);
+            return await GetTaskByIdAsync(task.Id, currentUserId);
         }
 
         public async Task<TaskResponseDto?> UpdateTaskAsync(int id, UpdateTaskDto dto, int currentUserId)
         {
-            var task = await _db.TodoTasks.FindAsync(id);
+            var task = await _access.VisibleTasks(currentUserId).FirstOrDefaultAsync(t => t.Id == id);
             if (task == null) return null;
 
             var changes = new List<string>();
+            var statusChanged = false;
 
             if (dto.Title != null && dto.Title != task.Title)
             {
@@ -95,6 +111,7 @@ namespace SmartTaskEngine.Services
             if (dto.Status.HasValue && dto.Status.Value != task.Status)
             {
                 task.Status = dto.Status.Value;
+                statusChanged = true;
                 changes.Add($"Status updated to {dto.Status.Value}");
             }
 
@@ -114,26 +131,43 @@ namespace SmartTaskEngine.Services
             {
                 await _db.SaveChangesAsync();
                 foreach (var change in changes)
-                {
                     await AddLogAsync(task.Id, currentUserId, change);
-                }
             }
 
-            var updated = await _db.TodoTasks
-                .Include(t => t.CreatedByUser)
-                .Include(t => t.AssignedToUser)
-                .FirstAsync(t => t.Id == task.Id);
+            if (statusChanged && task.AssignedToUserId.HasValue)
+            {
+                await _notifications.NotifyAsync(
+                    task.AssignedToUserId.Value,
+                    currentUserId,
+                    task.Id,
+                    task.ProjectId,
+                    NotificationType.StatusChanged,
+                    $"\"{task.Title}\" moved to {task.Status}.");
+            }
 
-            return MapToDto(updated);
+            return await GetTaskByIdAsync(task.Id, currentUserId);
+        }
+
+        public async Task<TaskResponseDto?> MoveTaskAsync(int id, int? projectId, int currentUserId)
+        {
+            var task = await _access.VisibleTasks(currentUserId).FirstOrDefaultAsync(t => t.Id == id);
+            if (task == null) return null;
+
+            if (projectId.HasValue && !await _access.CanAccessProjectAsync(projectId.Value, currentUserId))
+                return null;
+
+            task.ProjectId = projectId;
+            await _db.SaveChangesAsync();
+            await AddLogAsync(task.Id, currentUserId, projectId.HasValue ? $"Moved to project #{projectId}" : "Removed from project");
+            return await GetTaskByIdAsync(task.Id, currentUserId);
         }
 
         public async Task<bool> DeleteTaskAsync(int id, int currentUserId)
         {
-            var task = await _db.TodoTasks.FindAsync(id);
+            var task = await _access.VisibleTasks(currentUserId).FirstOrDefaultAsync(t => t.Id == id);
             if (task == null) return false;
 
             await AddLogAsync(task.Id, currentUserId, "Task deleted");
-
             _db.TodoTasks.Remove(task);
             await _db.SaveChangesAsync();
             return true;
@@ -141,7 +175,7 @@ namespace SmartTaskEngine.Services
 
         public async Task<TaskResponseDto?> AssignTaskAsync(int id, AssignTaskDto dto, int currentUserId)
         {
-            var task = await _db.TodoTasks.FindAsync(id);
+            var task = await _access.VisibleTasks(currentUserId).FirstOrDefaultAsync(t => t.Id == id);
             if (task == null) return null;
 
             var userExists = await _db.Users.AnyAsync(u => u.Id == dto.AssignedToUserId);
@@ -149,19 +183,23 @@ namespace SmartTaskEngine.Services
 
             task.AssignedToUserId = dto.AssignedToUserId;
             await _db.SaveChangesAsync();
-
             await AddLogAsync(task.Id, currentUserId, $"Task assigned to user #{dto.AssignedToUserId}");
+            await _notifications.NotifyAsync(
+                dto.AssignedToUserId,
+                currentUserId,
+                task.Id,
+                task.ProjectId,
+                NotificationType.Assigned,
+                $"You were assigned \"{task.Title}\".");
 
-            var updated = await _db.TodoTasks
-                .Include(t => t.CreatedByUser)
-                .Include(t => t.AssignedToUser)
-                .FirstAsync(t => t.Id == task.Id);
-
-            return MapToDto(updated);
+            return await GetTaskByIdAsync(task.Id, currentUserId);
         }
 
-        public async Task<List<ActivityLogDto>> GetLogsAsync(int taskId)
+        public async Task<List<ActivityLogDto>?> GetLogsAsync(int taskId, int currentUserId)
         {
+            var visible = await _access.VisibleTasks(currentUserId).AnyAsync(t => t.Id == taskId);
+            if (!visible) return null;
+
             var logs = await _db.ActivityLogs
                 .Include(l => l.User)
                 .Where(l => l.TaskId == taskId)
@@ -191,7 +229,7 @@ namespace SmartTaskEngine.Services
             await _db.SaveChangesAsync();
         }
 
-        private static TaskResponseDto MapToDto(TodoTask t) => new()
+        private static TaskResponseDto MapToDto(TodoTask t, int currentUserId) => new()
         {
             Id = t.Id,
             Title = t.Title,
@@ -203,7 +241,17 @@ namespace SmartTaskEngine.Services
             CreatedByUserId = t.CreatedByUserId,
             CreatedByUsername = t.CreatedByUser?.Username,
             AssignedToUserId = t.AssignedToUserId,
-            AssignedToUsername = t.AssignedToUser?.Username
+            AssignedToUsername = t.AssignedToUser?.Username,
+            ProjectId = t.ProjectId,
+            ProjectName = t.Project?.Name,
+            IsBookmarked = t.Bookmarks.Any(b => b.UserId == currentUserId),
+            CommentCount = t.Comments.Count,
+            ChecklistTotal = t.ChecklistItems.Count,
+            ChecklistDone = t.ChecklistItems.Count(i => i.IsDone),
+            Labels = t.Labels
+                .OrderBy(l => l.Name)
+                .Select(l => new LabelDto { Id = l.Id, Name = l.Name, Color = l.Color })
+                .ToList()
         };
     }
 }

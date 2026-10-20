@@ -37,7 +37,7 @@ namespace SmartTaskEngine.Services
                 Overdue = await tasks.CountAsync(t => t.DueDate != null && t.DueDate < now && t.Status != TaskState.Done),
                 AssignedToMe = await tasks.CountAsync(t => t.AssignedToUserId == userId && t.Status != TaskState.Done),
                 Projects = await _db.Projects.CountAsync(p => p.CreatedByUserId == userId || p.Members.Any(m => m.UserId == userId)),
-                OpenChecklistItems = await _db.ChecklistItems.CountAsync(i => !i.IsDone && tasks.Any(t => t.Id == i.TaskId)),
+                OpenChecklistItems = await _db.ChecklistItems.CountAsync(i => !i.IsDone && tasks.Select(t => t.Id).Contains(i.TaskId)),
                 UnreadNotifications = await _db.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead),
                 Bookmarks = await _db.TaskBookmarks.CountAsync(b => b.UserId == userId)
             };
@@ -45,16 +45,14 @@ namespace SmartTaskEngine.Services
 
         public async Task<List<UserSummaryDto>> GetUsersAsync()
         {
-            return await _db.Users
-                .OrderBy(u => u.Username)
-                .Select(u => new UserSummaryDto
-                {
-                    Id = u.Id,
-                    Username = u.Username,
-                    Email = u.Email,
-                    Role = u.Role.ToString()
-                })
-                .ToListAsync();
+            var users = await _db.Users.OrderBy(u => u.Username).ToListAsync();
+            return users.Select(u => new UserSummaryDto
+            {
+                Id = u.Id,
+                Username = u.Username,
+                Email = u.Email,
+                Role = u.Role.ToString()
+            }).ToList();
         }
     }
 }
