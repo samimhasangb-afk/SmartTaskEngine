@@ -97,7 +97,7 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Swagger available in all environments here for easy local testing;
+
 // restrict to Development-only before deploying anywhere public.
 app.UseSwagger();
 app.UseSwaggerUI(options =>
