@@ -98,7 +98,6 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 
-// restrict to Development-only before deploying anywhere public.
 app.UseSwagger();
 app.UseSwaggerUI(options =>
 {
