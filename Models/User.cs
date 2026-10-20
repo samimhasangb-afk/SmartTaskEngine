@@ -24,5 +24,11 @@ namespace SmartTaskEngine.Models
         public ICollection<TodoTask> CreatedTasks { get; set; } = new List<TodoTask>();
         public ICollection<TodoTask> AssignedTasks { get; set; } = new List<TodoTask>();
         public ICollection<ActivityLog> ActivityLogs { get; set; } = new List<ActivityLog>();
+        public ICollection<Project> CreatedProjects { get; set; } = new List<Project>();
+        public ICollection<ProjectMember> ProjectMemberships { get; set; } = new List<ProjectMember>();
+        public ICollection<TaskComment> Comments { get; set; } = new List<TaskComment>();
+        public ICollection<Label> Labels { get; set; } = new List<Label>();
+        public ICollection<TaskBookmark> Bookmarks { get; set; } = new List<TaskBookmark>();
+        public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     }
 }

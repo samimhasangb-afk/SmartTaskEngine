@@ -16,5 +16,7 @@ namespace SmartTaskEngine.DTOs.Tasks
         public DateTime? DueDate { get; set; }
 
         public int? AssignedToUserId { get; set; }
+
+        public int? ProjectId { get; set; }
     }
 }
