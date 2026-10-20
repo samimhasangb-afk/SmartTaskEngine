@@ -86,7 +86,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Open CORS for local development / testing from any client
+// Open CORS for local development 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
