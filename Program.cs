@@ -64,14 +64,16 @@ builder.Services.AddSwaggerGen(options =>
         Description = "Task management + collaboration REST API with JWT auth and activity logging."
     });
 
+    // Http + bearer makes Swagger send "Authorization: Bearer {token}".
+    // ApiKey sent the raw value, so a pasted JWT was rejected.
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Type: Bearer {your JWT token}"
+        Description = "Paste the JWT from login or register. Swagger adds the Bearer prefix."
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -79,7 +81,10 @@ builder.Services.AddSwaggerGen(options =>
         {
             new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" },
+                Scheme = "bearer",
+                Name = "Authorization",
+                In = ParameterLocation.Header
             },
             Array.Empty<string>()
         }
@@ -108,6 +113,8 @@ app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.MapGet("/", () => Results.Redirect("/swagger"));
 app.MapControllers();
 
 app.Run();
