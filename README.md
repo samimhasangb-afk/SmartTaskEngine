@@ -64,7 +64,19 @@ This automatically creates the `SmartTaskEngineDb` database and all three tables
 **Option B — manual SQL script:**
 Open `database/schema.sql` in SSMS and run it directly. This produces the exact same table structure without using migrations.
 
-### 3. Run the API
+### 3. Run the React app
+
+The UI lives in `client/` and talks to every API route through a Vite proxy.
+
+```bash
+cd client
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The API must already be running on `http://localhost:52205`.
+
+### 4. Run the API
 ```bash
 dotnet run
 ```

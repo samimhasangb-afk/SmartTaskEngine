@@ -30,7 +30,7 @@ namespace SmartTaskEngine.Controllers
         {
             var result = await _authService.LoginAsync(dto);
             if (result == null)
-                return Unauthorized(new { message = "Invalid email or password." });
+                return Unauthorized(new { message = "Invalid email, username, or password." });
 
             return Ok(result);
         }

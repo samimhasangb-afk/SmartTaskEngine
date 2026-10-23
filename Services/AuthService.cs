@@ -40,7 +40,8 @@ namespace SmartTaskEngine.Services
 
         public async Task<AuthResponseDto?> LoginAsync(LoginDto dto)
         {
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == dto.Email);
+            var key = dto.Email.Trim();
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == key || u.Username == key);
             if (user == null) return null;
 
             var result = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);

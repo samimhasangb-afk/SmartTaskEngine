@@ -119,8 +119,10 @@ app.UseSwaggerUI(options =>
     options.SwaggerEndpoint("/swagger/v1/swagger.json", "Smart Task & Collaboration Engine v1");
 });
 
-app.UseHttpsRedirection();
 app.UseCors("AllowAll");
+app.UseWhen(
+    context => !context.Request.Path.StartsWithSegments("/api"),
+    branch => branch.UseHttpsRedirection());
 app.UseAuthentication();
 app.UseAuthorization();
 

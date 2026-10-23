@@ -4,7 +4,7 @@ namespace SmartTaskEngine.DTOs.Auth
 {
     public class LoginDto
     {
-        [Required, EmailAddress]
+        [Required, MaxLength(150)]
         public string Email { get; set; } = string.Empty;
 
         [Required]

@@ -3,3 +3,7 @@ obj/
 .vs/
 *.user
 appsettings.Production.json
+client/node_modules/
+client/dist/
+client/node_modules/
+client/dist/
