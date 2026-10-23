@@ -96,7 +96,7 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// Open CORS for Shamim Cp are not permit to connect 
+// Open CORS for Shamim 
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
